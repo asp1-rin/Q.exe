@@ -23,7 +23,7 @@ jobs:
 
     - name: Build EXE
       run: |
-        pyinstaller --onefile --icon="**/Q.ico"--name Q Q.py
+        pyinstaller --onefile --icon=icon/Q.ico--name Q Q.py
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
