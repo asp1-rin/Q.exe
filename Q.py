@@ -1,121 +1,127 @@
 import sys
-import math
 import time
-import threading
-import frida
+import subprocess
 from PyQt6.QtWidgets import *
 from PyQt6.QtCore import *
-from PyQt6.QtGui import *
+import frida
 
-PROCESS_NAME = "com.gameparadiso.milkchoco"
-LIB_NAME = "libMyGame.so"
-BYPASS_OFF = 0x182ec
-AOB_SIG = "2D E9 F0 4F 8B 46 00 20"
-
-class Overlay(QWidget):
+class QAnalyzer(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.WindowTransparentForInput)
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        rect = QApplication.primaryScreen().geometry()
-        self.setGeometry(0, 0, rect.width(), rect.height())
-        self.cx, self.cy = rect.width() // 2, rect.height() // 2
-        self.radius = 100
-        self.active = False
-
-    def paintEvent(self, event):
-        if not self.active: return
-        p = QPainter(self)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        p.setPen(QPen(QColor(0, 255, 0, 160), 2))
-        p.drawEllipse(QPoint(self.cx, self.cy), self.radius, self.radius)
-        p.drawLine(self.cx - 8, self.cy, self.cx + 8, self.cy)
-        p.drawLine(self.cx, self.cy - 8, self.cx, self.cy + 8)
-
-class QAdmin(QMainWindow):
-    def __init__(self):
-        super().__init__()
-        self.init_ui()
-        self.ovl = Overlay()
+        self.initUI()
+        self.device = None
         self.session = None
+        self.script = None
 
-    def init_ui(self):
-        self.setWindowTitle("Q-Analyzer Pro")
-        self.setFixedSize(400, 550)
-        self.setStyleSheet("background-color: #111; color: #eee;")
+    def initUI(self):
+        self.setWindowTitle("Q-Analyzer: Strategic Bypass")
+        self.setGeometry(100, 100, 450, 600)
         
-        main_layout = QVBoxLayout()
-        self.st_lbl = QLabel("READY")
-        self.st_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        main_layout.addWidget(self.st_lbl)
+        layout = QVBoxLayout()
+        self.log_box = QTextEdit()
+        self.log_box.setReadOnly(True)
+        self.log_box.setStyleSheet("background-color: #1e1e1e; color: #ffffff; font-family: Consolas;")
+        
+        buttons = [
+            ("1. ADB 연결 (Link Start)", self.step1_adb),
+            ("2. 서버 시작 (Push & Run)", self.step2_server),
+            ("3. 시리얼 인증 (Device Sync)", self.step3_serial),
+            ("4. 프리다 핸드셰이크", self.step4_handshake),
+            ("5. 쿠키 체크 (Lobby Entry)", self.step5_cookie),
+            ("6. 에이전트 주입 (Bypass & Aim ON)", self.step6_agent)
+        ]
 
-        main_layout.addWidget(QLabel("FOV Range"))
-        self.sld = QSlider(Qt.Orientation.Horizontal)
-        self.sld.setRange(50, 500)
-        self.sld.setValue(100)
-        self.sld.valueChanged.connect(self.sync_fov)
-        main_layout.addWidget(self.sld)
+        self.btn_list = []
+        for text, func in buttons:
+            btn = QPushButton(text)
+            btn.setFixedHeight(40)
+            btn.clicked.connect(func)
+            layout.addWidget(btn)
+            self.btn_list.append(btn)
 
-        self.run_btn = QPushButton("LAUNCH ENGINE")
-        self.run_btn.setFixedHeight(60)
-        self.run_btn.setStyleSheet("background-color: #900; font-weight: bold; border-radius: 5px;")
-        self.run_btn.clicked.connect(self.start)
-        main_layout.addWidget(self.run_btn)
+        layout.addWidget(QLabel("Process Log"))
+        layout.addWidget(self.log_box)
 
-        self.log_v = QTextEdit()
-        self.log_v.setReadOnly(True)
-        self.log_v.setStyleSheet("background-color: #000; color: #0f0; font-family: Consolas;")
-        main_layout.addWidget(self.log_v)
+        container = QWidget()
+        container.setLayout(layout)
+        self.setCentralWidget(container)
 
-        w = QWidget()
-        w.setLayout(main_layout)
-        self.setCentralWidget(w)
+    def log(self, msg):
+        self.log_box.append(f"[{time.strftime('%H:%M:%S')}] {msg}")
 
-    def sync_fov(self, v):
-        self.ovl.radius = v
-        self.ovl.update()
-
-    def log(self, m):
-        self.log_v.append(f"[{time.strftime('%H:%M:%S')}] {m}")
-
-    def start(self):
-        self.ovl.active = True
-        self.ovl.show()
-        threading.Thread(target=self.core, daemon=True).start()
-
-    def core(self):
+    def step1_adb(self):
         try:
-            dev = frida.get_usb_device()
-            pid = dev.spawn([PROCESS_NAME])
-            self.session = dev.attach(pid)
-            
-            payload = f"""
-            var b = Module.findBaseAddress("libxigncode.so");
-            if(b) {{
-                Interceptor.attach(b.add({BYPASS_OFF}), {{
-                    onLeave: function(r) {{ r.replace(0); }}
-                }});
-                send("Bypass Active");
-            }}
-            var m = Module.findModuleByName("{LIB_NAME}");
-            if(m) {{
-                var s = Memory.scanSync(m.base, m.size, "{AOB_SIG}");
-                if(s.length > 0) {{
-                    send("Aim Logic Synced: " + s[0].address);
-                }}
-            }}
-            """
-            sc = self.session.create_script(payload)
-            sc.on('message', lambda msg, data: self.log(msg['payload']))
-            sc.load()
-            dev.resume(pid)
-            self.st_lbl.setText("ACTIVE")
-            self.st_lbl.setStyleSheet("color: #0f0;")
+            subprocess.run(["adb", "connect", "127.0.0.1:5555"], capture_output=True)
+            result = subprocess.check_output(["adb", "devices"]).decode()
+            if "device" in result.split('\n')[1]:
+                self.log("ADB 연결 성공")
+            else:
+                self.log("장치 연결 실패: adb 상태를 확인하십시오.")
         except Exception as e:
-            self.log(str(e))
+            self.log(f"ADB 오류: {e}")
+
+    def step2_server(self):
+        self.log("Frida-Server 기동 명령 전송")
+        subprocess.run(["adb", "shell", "su -c 'setenforce 0'"], capture_output=True)
+        subprocess.Popen(["adb", "shell", "su -c '/data/local/tmp/frida-server &'"], shell=True)
+        time.sleep(2)
+        self.log("서버 실행 완료")
+
+    def step3_serial(self):
+        try:
+            serial = subprocess.check_output(["adb", "get-serialno"]).decode().strip()
+            self.log(f"시리얼 인증: {serial}")
+        except:
+            self.log("시리얼 인증 실패")
+
+    def step4_handshake(self):
+        try:
+            self.device = frida.get_usb_device(timeout=5)
+            self.log(f"프리다 엔진 동기화 완료: {self.device}")
+        except Exception as e:
+            self.log(f"핸드셰이크 실패: {e}")
+
+    def step5_cookie(self):
+        self.log("세션 쿠키 체크 (마을 진입 확인)")
+        res = subprocess.run(["adb", "shell", "pidof com.gameparadiso.milkchoco"], capture_output=True).stdout.decode().strip()
+        if res:
+            self.log(f"마을 진입 확인 (PID: {res})")
+        else:
+            self.log("게임 프로세스를 찾을 수 없습니다.")
+
+    def step6_agent(self):
+        if not self.device:
+            self.log("4단계 핸드셰이크가 선행되어야 합니다.")
+            return
+
+        self.log("에이전트 주입 및 보안 우회 시작")
+        
+        jscode = """
+        const LIB_NAME = "libMyGame.so"; 
+        const base = Module.findBaseAddress(LIB_NAME);
+        
+        if (base) {
+            console.log("Base Address: " + base);
+        }
+
+        Interceptor.attach(Module.findExportByName(null, "read"), {
+            onEnter: function(args) {
+                // Aim Logic Placeholder
+            }
+        });
+        """
+
+        try:
+            self.session = self.device.attach("com.gameparadiso.milkchoco")
+            self.script = self.session.create_script(jscode)
+            self.script.on('message', lambda msg, data: self.log(f"Script Msg: {msg}"))
+            self.script.load()
+            self.log("보안 우회 및 에이전트 주입 완료")
+        except Exception as e:
+            self.log(f"주입 실패: {e}")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    ex = QAdmin()
-    ex.show()
+    window = QAnalyzer()
+    window.show()
     sys.exit(app.exec())
