@@ -1,31 +1,31 @@
+// engine/esp.js
 var ESP = {
-    getEnemyList: function() {
-        var enemies = [];
+    loop: function() {
         const base = Module.findBaseAddress(OFFSETS.G_LIB);
-        if (!base) return enemies;
+        if (!base) return;
 
         const playerListPtr = base.add(OFFSETS.ADDR_POSITION_BASE).readPointer();
-        if (playerListPtr.isNull()) return enemies;
+        if (playerListPtr.isNull()) return;
 
-        // 실제 게임 구조에 따른 반복문 (보통 0~100명 사이 스캔)
+        var enemyData = [];
         for (let i = 0; i < 50; i++) {
-            let enemyPtr = playerListPtr.add(i * 0x8).readPointer(); // 포인터 배열 구조 예시
+            let enemyPtr = playerListPtr.add(i * 0x8).readPointer();
             if (enemyPtr.isNull()) continue;
 
             let hp = enemyPtr.add(OFFSETS.OFF_HP).readInt();
-            if (hp <= 0 || hp > 1000) continue; // 사망자나 비정상 데이터 제외
+            if (hp <= 0) continue;
 
-            enemies.push({
-                ptr: enemyPtr,
-                hp: hp,
-                name: enemyPtr.add(OFFSETS.OFF_NICKNAME).readUtf8String(),
+            enemyData.push({
                 x: enemyPtr.add(OFFSETS.OFF_X).readFloat(),
                 y: enemyPtr.add(OFFSETS.OFF_Y).readFloat(),
-                z: enemyPtr.add(OFFSETS.OFF_Z).readFloat()
+                z: enemyPtr.add(OFFSETS.OFF_Z).readFloat(),
+                hp: hp,
+                name: enemyPtr.add(OFFSETS.OFF_NICKNAME).readUtf8String()
             });
         }
-        return enemies;
+        // 파이썬(Q.py)으로 데이터 전송
+        send({ type: 'esp', data: enemyData });
     }
 };
 
-global.ESP = ESP;
+setInterval(ESP.loop, 16); // 60FPS 수준으로 데이터 갱신
