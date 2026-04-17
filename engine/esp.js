@@ -1,4 +1,3 @@
-// engine/esp.js
 var ESP = {
     loop: function() {
         const base = Module.findBaseAddress(OFFSETS.G_LIB);
@@ -23,9 +22,7 @@ var ESP = {
                 name: enemyPtr.add(OFFSETS.OFF_NICKNAME).readUtf8String()
             });
         }
-        // 파이썬(Q.py)으로 데이터 전송
-        send({ type: 'esp', data: enemyData });
+        send({ type: 'esp_data', data: enemyData });
     }
 };
-
-setInterval(ESP.loop, 16); // 60FPS 수준으로 데이터 갱신
+setInterval(ESP.loop, 16);
